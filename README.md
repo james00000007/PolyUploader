@@ -17,6 +17,7 @@
   <a href="#supported-hosts">🌐 Supported hosts</a> |
   <a href="#comparison-with-mirroredto-mirroraceorg-and-multiup">🔍 Comparison with Mirrored.to, Mirrorace.org and MultiUp</a>
   <br><br>
+  <a href="#link-protection">🔒 Link protection</a> |
   <a href="#telemetry">📊 Telemetry</a> |
   <a href="#managing-cors">🛠️ Managing CORS</a> |
   <a href="#notes-from-the-developer">🗒️ Notes from the developer</a> |
@@ -32,7 +33,6 @@
     <a href="https://www.producthunt.com/products/polyuploader?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-polyuploader" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1002185&theme=light&t=1754471623485" alt="PolyUploader - Upload&#0032;files&#0032;to&#0032;130&#0043;&#0032;hosts&#0032;simultaneously | Product Hunt" style="width: 139px; height: 30px;" width="139" height="30" /></a>
     <a href="https://sourceforge.net/projects/polyuploader/files/latest/download"><img alt="Download PolyUploader" src="https://a.fsdn.com/con/app/sf-download-button" width=175 height=30 srcset="https://a.fsdn.com/con/app/sf-download-button?button_size=2x 2x"></a>
     <a href="https://alternativeto.net/software/polyuploader/about/" target="_blank"><img style='border-radius: 30px; height:30px;' src="https://i.imgur.com/H9JRjL5.png"/></a>
-    <a href='https://ko-fi.com/I2I7ZG8O5' target='_blank'><img height='36' style='border:0px;height:30px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 </div>
 
 # Quick overview:
@@ -42,6 +42,7 @@
 - View a detailed history of your uploads with expiration status and delete buttons
 - Create and manage upload profiles to automate frequent tasks
 - Generate a single sharing link to bundle multiple host links (e.g. [example](https://p-u.vercel.app/QZZGsMNho9))
+- Protect your upload links after uploading using link protection services (PrivateBin, SafeLinking, Filecrypt, and more), either as a bundle or link by link
 - No account required, fully open-source, fast, and free
 - Built with a focus on speed and security using Rust backend
 
@@ -279,6 +280,23 @@ If you know of a host that I can add, please open an [issue](https://github.com/
 <img width="1140" height="730" alt="settings_windows_context_menu" src="https://i.imgur.com/RuUJSrw.jpeg" />
 
 </details>
+
+# Link Protection
+
+After uploading a file, PolyUploader lets you protect the generated host links using a variety of link protection and encrypted paste services. You can protect your links either as a **bundle** (all host links grouped into a single protected page) or **link by link** (one protected page per host link). This feature is accessible directly from the results view once the upload is complete.
+
+## 🔒 Supported services
+
+| Name | Url | 🔑 API key | 🔄 Custom instance | 🗑️ Deletion |
+| :--- | :-- | :--------: | :----------------: | :---------: |
+| <img src="https://i.imgur.com/dUn7ivH.png" width="16"/> PrivateBin | https://privatebin.net (editable) | - | ✔️ | ✔️ |
+| <img src="https://i.imgur.com/dPOPLvA.png" width="16"/> Cryptgeon | https://cryptgeon.org | - | - | - |
+| <img src="https://i.imgur.com/kZk1Wqf.png" width="16"/> SafeLinking | https://safelinking.net | - | - | - |
+| <img src="https://i.imgur.com/lpVQo35.png" width="20"/> pastes.dev | https://pastes.dev | - | - | - |
+| <img src="https://i.imgur.com/tR7PnWY.png" width="16"/> Katbin | https://katb.in | - | - | - |
+| <img src="https://i.imgur.com/yUd7aJr.png" width="16"/> Filecrypt | https://filecrypt.cc | 🔒 Required | - | ✔️ |
+
+> Only PrivateBin allows you to specify a custom compatible instance (default: `privatebin.net`).
 
 # Comparison with [Mirrored.to](https://mirrored.to), [Mirrorace.org](https://mirrorace.org) and [MultiUp](https://multiup.io)
 

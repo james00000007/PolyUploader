@@ -1,6 +1,7 @@
 import { invoke, convertFileSrc } from './tauri.js';
 import { ENV, BUTTONS, ELEMENT_DISPLAYS, INPUTS, STATE, URL_FOR_BYPASS_CORS, SELECTS, HOST_SITES, API_URL } from './globals.js';
 import { disabled_upload_button, get_resource_path, get_file_name_from_url, copy_to_clipboard, disable_button, get_site_name, get_value_from_path, get_values_from_paths, resolve_value, get_domain_name, get_retention_duration, enable_upload_button } from './utils.js';
+import { create_privatebin_paste, create_cryptgeon_note, create_safelinking_package, create_pastesdev_paste, create_katbin_paste, create_filecrypt_container } from './link_protection.js';
 
 function anonymize_urls(text) {
   return text
@@ -451,6 +452,249 @@ async function display_final_url(result) {
             }, 2000);
           };
         };
+      });
+    };
+
+    // Link protection on-demand
+    if (all_links_copy.length > 0) {
+      const lp_wrap = document.createElement("div");
+      lp_wrap.id = "lp_wrap";
+      lp_wrap.innerHTML = `
+        <div class="mt-4 pt-4 border-t border-[#4c5666]/50">
+          <button id="lp_trigger_btn" class="flex items-center gap-2 mx-auto text-sm text-slate-400 hover:text-white transition duration-200 group">
+            <i class="fa-sharp-duotone fa-solid fa-lock text-slate-500 group-hover:text-indigo-400 transition duration-200"></i>
+            <span>Link protection</span>
+            <i id="lp_chevron" class="fa-sharp fa-solid fa-chevron-down text-xs transition-transform duration-200"></i>
+          </button>
+          <div id="lp_panel" class="hidden mt-3 p-4 rounded-xl border border-[#4c5666] bg-white/5">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs text-slate-400 whitespace-nowrap">Service</span>
+              <select id="lp_service_select" class="flex-1 bg-[#0d0f1a] border border-[#4c5666] text-white text-sm rounded-lg px-2 py-1.5 cursor-pointer hover:border-[#616e83] transition duration-200 focus:outline-none focus:border-indigo-500">
+                <option value="privatebin">PrivateBin</option>
+                <option value="cryptgeon">Cryptgeon</option>
+                <option value="safelinking">SafeLinking</option>
+                <option value="pastesdev">pastes.dev</option>
+                <option value="katbin">Katbin</option>
+                <option value="filecrypt">Filecrypt</option>
+              </select>
+            </div>
+            <div id="lp_pb_row" class="mb-2">
+              <input id="lp_pb_instance" type="text" placeholder="PrivateBin instance URL (default: https://privatebin.net/)" class="w-full bg-[#0d0f1a] border border-[#4c5666] text-white text-sm rounded-lg px-2 py-1.5 hover:border-[#616e83] transition duration-200 focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div id="lp_fc_row" class="mb-2">
+              <input id="lp_fc_key" type="text" placeholder="Filecrypt API key" class="w-full bg-[#0d0f1a] border border-[#4c5666] text-white text-sm rounded-lg px-2 py-1.5 hover:border-[#616e83] transition duration-200 focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div id="lp_pb_warn" class="hidden mb-3 text-center">
+              <p class="text-xs text-amber-400/80"><i class="fa-sharp fa-solid fa-clock mr-1"></i> PrivateBin imposes a 10-second cooldown between paste creations in "one per link" mode.</p>
+            </div>
+            <div class="flex items-center justify-center gap-6 mb-4 text-sm text-slate-300">
+              <label class="flex items-center gap-2 cursor-pointer hover:text-white transition duration-200">
+                <input type="radio" name="lp_mode" value="bundle" checked class="accent-indigo-500 cursor-pointer">
+                <span>Bundle all links</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:text-white transition duration-200">
+                <input type="radio" name="lp_mode" value="individual" class="accent-indigo-500 cursor-pointer">
+                <span>One paste per link</span>
+              </label>
+            </div>
+            <div class="flex justify-center">
+              <button id="lp_protect_btn" class="bg-gradient-to-t from-indigo-700 to-indigo-500 text-white text-sm px-4 py-1.5 rounded-lg transition duration-200 hover:scale-[1.02] hover:from-indigo-600 hover:to-[#7072ee] hover:shadow-[0_0px_20px_rgba(99,_102,_241,_0.2)] active:scale-[1.03]">
+                <i class="fa-sharp-duotone fa-solid fa-shield-halved mr-1"></i> Protect
+              </button>
+            </div>
+            <div id="lp_results" class="mt-3 text-center"></div>
+          </div>
+        </div>
+      `;
+      ELEMENT_DISPLAYS.final_upload_url.appendChild(lp_wrap);
+
+      const lp_svc_saved = localStorage.getItem("link_protection_service") || "privatebin";
+      const lp_svc_el = document.getElementById("lp_service_select");
+      const lp_pb_el = document.getElementById("lp_pb_instance");
+      const lp_pb_row_el = document.getElementById("lp_pb_row");
+      const lp_pb_warn_el = document.getElementById("lp_pb_warn");
+      const lp_fc_row_el = document.getElementById("lp_fc_row");
+      const lp_fc_el = document.getElementById("lp_fc_key");
+
+      lp_svc_el.value = lp_svc_saved;
+      lp_pb_el.value = localStorage.getItem("privatebin_instance_url") || "";
+      lp_fc_el.value = localStorage.getItem("filecrypt_api_key") || "";
+      lp_pb_row_el.style.display = lp_svc_saved === "privatebin" ? "" : "none";
+      lp_fc_row_el.style.display = lp_svc_saved === "filecrypt" ? "" : "none";
+
+      function lp_update_ui(svc) {
+        lp_pb_row_el.style.display = svc === "privatebin" ? "" : "none";
+        lp_fc_row_el.style.display = svc === "filecrypt" ? "" : "none";
+        const mode = document.querySelector('input[name="lp_mode"]:checked')?.value || "bundle";
+        lp_pb_warn_el.classList.toggle("hidden", !(svc === "privatebin" && mode === "individual"));
+      }
+
+      lp_svc_el.addEventListener("change", function () {
+        localStorage.setItem("link_protection_service", this.value);
+        lp_update_ui(this.value);
+      });
+      lp_pb_el.addEventListener("input", function () {
+        localStorage.setItem("privatebin_instance_url", this.value.trim());
+      });
+      lp_fc_el.addEventListener("input", function () {
+        localStorage.setItem("filecrypt_api_key", this.value.trim());
+      });
+      document.getElementById("lp_panel").addEventListener("change", function (e) {
+        if (e.target.name === "lp_mode") {
+          lp_update_ui(lp_svc_el.value);
+        }
+      });
+
+      document.getElementById("lp_trigger_btn").addEventListener("click", function () {
+        const panel = document.getElementById("lp_panel");
+        const chevron = document.getElementById("lp_chevron");
+        const popup_container = document.getElementById("popup_container");
+        const is_open = !panel.classList.contains("hidden");
+        if (is_open) {
+          panel.classList.add("hidden");
+          chevron.style.transform = "";
+          popup_container.style.maxHeight = "";
+        } else {
+          panel.classList.remove("hidden");
+          chevron.style.transform = "rotate(180deg)";
+          popup_container.style.maxHeight = "80vh";
+        }
+      });
+
+      document.getElementById("lp_protect_btn").addEventListener("click", async function () {
+        const service = document.getElementById("lp_service_select").value;
+        const mode = document.querySelector('input[name="lp_mode"]:checked').value;
+        const results_div = document.getElementById("lp_results");
+        const protect_btn = document.getElementById("lp_protect_btn");
+        const svc_labels = { privatebin: "PrivateBin", cryptgeon: "Cryptgeon", safelinking: "SafeLinking", pastesdev: "pastes.dev", katbin: "Katbin", filecrypt: "Filecrypt" };
+        const svc_label = svc_labels[service] || service;
+        const raw_inst = (localStorage.getItem("privatebin_instance_url") || "").trim();
+        const pb_inst = raw_inst ? (raw_inst.endsWith('/') ? raw_inst : raw_inst + '/') : 'https://privatebin.net/';
+
+        protect_btn.innerHTML = `<i class="fa-sharp-duotone fa-solid fa-spinner fa-spin-pulse mr-1"></i> Processing...`;
+        protect_btn.classList.add("pointer-events-none", "opacity-70");
+        results_div.innerHTML = "";
+
+        async function run_lp_paste(text) {
+          const upload_date_lp = new Date().toISOString();
+          let lp_url, lp_expiration;
+          let lp_manage_link = "", lp_delete_method = "GET";
+          let lp_delete_params = JSON.stringify({}), lp_delete_headers = JSON.stringify({});
+          let lp_formatted_req = "formatted";
+
+          if (service === "cryptgeon") {
+            const cg = await create_cryptgeon_note(text, URL_FOR_BYPASS_CORS, STATE.file_to_upload_name, upload_date_lp);
+            lp_url = cg.url;
+            const d = new Date(upload_date_lp); d.setMinutes(d.getMinutes() + 360);
+            lp_expiration = d.toLocaleString("en-US", {month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "numeric", hour12: true}).replace(",", "");
+          } else if (service === "safelinking") {
+            const sl = await create_safelinking_package(text, URL_FOR_BYPASS_CORS, STATE.file_to_upload_name, upload_date_lp);
+            lp_url = sl.url; lp_expiration = "Infinite";
+          } else if (service === "pastesdev") {
+            const pd = await create_pastesdev_paste(text, URL_FOR_BYPASS_CORS, STATE.file_to_upload_name, upload_date_lp);
+            lp_url = pd.url; lp_expiration = "Infinite";
+          } else if (service === "katbin") {
+            const kb = await create_katbin_paste(text, URL_FOR_BYPASS_CORS, STATE.file_to_upload_name, upload_date_lp);
+            lp_url = kb.url; lp_expiration = "Infinite";
+          } else if (service === "filecrypt") {
+            const fc_key = (localStorage.getItem("filecrypt_api_key") || "").trim();
+            const fc = await create_filecrypt_container(text, fc_key, URL_FOR_BYPASS_CORS, STATE.file_to_upload_name);
+            lp_url = fc.url; lp_expiration = "Infinite";
+            lp_manage_link = "https://www.filecrypt.cc/api.php"; lp_delete_method = "POST";
+            lp_delete_params = JSON.stringify({ fn: "containerV2", sub: "remove", api_key: fc_key, container_id: fc.container_id });
+            lp_delete_headers = JSON.stringify({ "Content-Type": "application/x-www-form-urlencoded" });
+            lp_formatted_req = "formatted";
+          } else {
+            const pb = await create_privatebin_paste(text, pb_inst, URL_FOR_BYPASS_CORS, STATE.file_to_upload_name, upload_date_lp);
+            lp_url = pb.url; lp_manage_link = pb.instance_url; lp_delete_method = "DELETE";
+            lp_delete_params = JSON.stringify({ pasteid: pb.id, deletetoken: pb.deletetoken });
+            lp_delete_headers = JSON.stringify({ "Content-Type": "application/json", "X-Requested-With": "JSONHttpRequest" });
+            lp_formatted_req = "unformatted";
+            lp_expiration = pb.expire === 'never' ? 'Infinite' : (() => {
+              const d = new Date(upload_date_lp);
+              if (pb.expire === '1year') d.setFullYear(d.getFullYear() + 1);
+              else if (pb.expire === '1month') d.setMonth(d.getMonth() + 1);
+              else if (pb.expire === '1week') d.setDate(d.getDate() + 7);
+              else if (pb.expire === '1day') d.setDate(d.getDate() + 1);
+              else if (pb.expire === '1hour') d.setHours(d.getHours() + 1);
+              else if (pb.expire === '10min') d.setMinutes(d.getMinutes() + 10);
+              else if (pb.expire === '5min') d.setMinutes(d.getMinutes() + 5);
+              return d.toLocaleString("en-US", {month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "numeric", hour12: true}).replace(",", "");
+            })();
+          }
+
+          const lp_upload_date = new Date(upload_date_lp).toLocaleString("en-US", {month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "numeric", hour12: true}).replace(",", "");
+          invoke("add_history_json", {
+            newLink: lp_url, newUploadDate: lp_upload_date, newExpirationDate: lp_expiration,
+            manageLink: lp_manage_link, deleteMethod: lp_delete_method,
+            deleteParameters: lp_delete_params, deleteHeaders: lp_delete_headers,
+            formattedRequest: lp_formatted_req, uploadFilename: STATE.file_to_upload_name
+          });
+          return { url: lp_url };
+        }
+
+        function lp_append_result(url, idx, show_index) {
+          const item = document.createElement("div");
+          item.className = "flex items-center justify-center gap-2 mt-2 text-sm";
+          item.innerHTML = `
+            ${show_index ? `<span class="text-xs text-slate-500 whitespace-nowrap">Link ${idx + 1}</span>` : ""}
+            <a href="${url}" target="_blank" class="truncate max-w-[340px] text-indigo-300 hover:underline transition duration-200">${url}</a>
+            <button class="lp_copy_btn flex-shrink-0 transition active:scale-125 text-slate-400 hover:text-white" data-url="${url}"><i class="fa-sharp-duotone fa-solid fa-copy text-xs"></i></button>
+          `;
+          item.querySelector(".lp_copy_btn").addEventListener("click", () => copy_to_clipboard(url));
+          results_div.appendChild(item);
+        }
+
+        try {
+          if (mode === "bundle") {
+            const r = await run_lp_paste(all_links_copy);
+            copy_to_clipboard(r.url);
+            results_div.innerHTML = `<p class="text-xs text-slate-400 mb-1"><i class="fa-sharp-duotone fa-solid fa-lock mr-1 text-indigo-400"></i><span class="text-white/80">${svc_label}</span> — copied to clipboard <i class="fa-sharp fa-solid fa-check text-emerald-400 ml-0.5"></i></p>`;
+            lp_append_result(r.url, 0, false);
+          } else {
+            const links_arr = Array.from(all_links_to_copy).map(b => b.getAttribute("final_link_to_copy")).filter(l => l && l.trim().length > 0);
+            const header = document.createElement("p");
+            header.className = "mb-1 text-xs text-slate-400";
+            header.innerHTML = `<i class="fa-sharp-duotone fa-solid fa-lock mr-1 text-indigo-400"></i><span class="text-white/80">${svc_label}</span> — <span id="lp_progress">0 / ${links_arr.length}</span>`;
+            results_div.appendChild(header);
+            const progress_el = document.getElementById("lp_progress");
+
+            const all_urls = [];
+            for (let i = 0; i < links_arr.length; i++) {
+              if (i > 0 && service === "privatebin") {
+                const countdown_el = document.createElement("p");
+                countdown_el.className = "mt-1 text-xs text-amber-400/70";
+                results_div.appendChild(countdown_el);
+                for (let s = 11; s > 0; s--) {
+                  countdown_el.innerHTML = `<i class="fa-sharp fa-solid fa-clock mr-1"></i> Waiting ${s}s before next paste...`;
+                  await new Promise(res => setTimeout(res, 1000));
+                }
+                countdown_el.remove();
+              }
+              const r = await run_lp_paste(links_arr[i]);
+              all_urls.push(r.url);
+              lp_append_result(r.url, i, true);
+              if (progress_el) progress_el.textContent = `${i + 1} / ${links_arr.length}`;
+            }
+            copy_to_clipboard(all_urls.join("\n"));
+          }
+
+          protect_btn.innerHTML = `<i class="fa-sharp fa-solid fa-check mr-1"></i> Protect`;
+          protect_btn.classList.remove("opacity-70");
+          setTimeout(() => {
+            protect_btn.innerHTML = `<i class="fa-sharp-duotone fa-solid fa-shield-halved mr-1"></i> Protect`;
+            protect_btn.classList.remove("pointer-events-none");
+          }, 1500);
+        } catch (error) {
+          console.error(error);
+          const err_el = document.createElement("p");
+          err_el.className = "mt-2 text-sm";
+          err_el.style.color = "#ff2828";
+          err_el.innerHTML = `<i class="fa-sharp fa-solid fa-circle-exclamation mr-1"></i> ${error.message || "Link protection failed."}`;
+          results_div.appendChild(err_el);
+          protect_btn.innerHTML = `<i class="fa-sharp-duotone fa-solid fa-shield-halved mr-1"></i> Protect`;
+          protect_btn.classList.remove("pointer-events-none", "opacity-70");
+        }
       });
     };
 
